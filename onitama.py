@@ -20,11 +20,13 @@ PAWN_P1 = PLAYER1 * PAWN_BASE
 KING_P1 = PLAYER1 * KING_BASE
 PAWN_P2 = PLAYER2 * PAWN_BASE
 KING_P2 = PLAYER2 * KING_BASE
+LAST_MOVE = 99
 backline_P1 = 0
 backline_P2 = 4
 
 # Define colors
 WHITE = (255, 255, 255)
+LIGHT_GREY = (200, 200, 200)
 BLACK = (0, 0, 0)
 GRAY = (200, 200, 200)
 RED = (255, 0, 0)
@@ -176,6 +178,8 @@ game.addPlayer(p2)
 
 game.initPlace()
 game.deal()
+
+val = p1.validateRandomMove()
 
 #endregion
 
