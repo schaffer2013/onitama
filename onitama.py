@@ -179,7 +179,7 @@ game.addPlayer(p2)
 game.initPlace()
 game.deal()
 
-val = p1.validateRandomMove()
+val = p1.getRandomValidatedMove()
 
 #endregion
 

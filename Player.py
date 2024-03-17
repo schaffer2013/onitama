@@ -34,22 +34,30 @@ class Player:
                 if board[x][y] == self.pawnValue:
                     self.pawnPos.append([x, y])
 
-    def validateRandomMove(self):
-        move = self.getRandomMove()
-        pieceLocation = self.pieceLocation(self.randomPiece())
-        allPieceLocations = []
-        if pieceLocation != self.kingPos:
-            allPieceLocations.append(self.kingPos)
-        for p in self.pawnPos:
-            if pieceLocation != p:
-                allPieceLocations.append(p)
-        return self.validateMove(move, pieceLocation, allPieceLocations)
+    def getRandomValidatedMove(self):
+        valid = False
+        while not valid:
+            move = self.getRandomMove()
+            pieceLocation = self.pieceLocation(self.randomPiece())
+            valid = self.validateMove(move, pieceLocation)
+        return move, pieceLocation
 
-    def validateMove(self, move, piecePos, otherPiecePos):
-        poss = range(4)
+    def validateMove(self, move, piecePos):
+        poss = range(5)
         x = move[0] + piecePos[0]
         y = move[1] + piecePos[1]
-        return x in poss and y in poss
+        if x in poss and y in poss:
+            otherPieceLocations = []
+            if piecePos != self.kingPos:
+                otherPieceLocations.append(self.kingPos)
+            for p in self.pawnPos:
+                if piecePos != p:
+                    otherPieceLocations.append(p)
+            for o in otherPieceLocations:
+                if x == o[0] and y == o[1]:
+                    return False
+            return True
+        return False
         
     def getMove(self, cardIndex, moveIndex):
         return self.cards[cardIndex][moveIndex]
