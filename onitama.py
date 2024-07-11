@@ -128,12 +128,12 @@ def drawPiece(x, y, pieceType):
         color = WHITE
     set_cell_color(LARGE_GRID_INDEX, x, y, color)
 
-def draw_card_on_grid(gridIndex, card):
+def draw_card_on_grid(gridIndex, card, playerId = 0):
     gridRotation = 0
     if gridIndex == TOP_LEFT_GRID_INDEX or gridIndex == TOP_RIGHT_GRID_INDEX:
         gridRotation = 2
     elif gridIndex == RIGHT_GRID_INDEX:
-        gridRotation = 1
+        gridRotation = 1 - playerId
 
     center = (2,2)
     for offset in card:
@@ -190,6 +190,8 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                game.nextPlayer()
 
         # Get mouse position
         if SHOW_MOUSE_POS:
@@ -198,6 +200,7 @@ def main():
         # Fill the background with white
         screen.fill(WHITE)
 
+        all_grid_dims.clear()
         # Draw the large grid
         large_dims = draw_grid(GRID_SIZE * LARGE_CELL_SIZE, GRID_SIZE * LARGE_CELL_SIZE, GRID_SIZE, LARGE_CELL_SIZE, BLACK)
         all_grid_dims.append(large_dims)
@@ -211,7 +214,8 @@ def main():
         all_grid_dims.append(draw_grid(large_dims[1][0], large_dims[1][1] + LARGE_CELL_SIZE, GRID_SIZE, SMALL_CELL_SIZE, GRAY, corner='top-right'))
 
         # Draw the right small grid
-        all_grid_dims.append(draw_grid(large_dims[1][0] + LARGE_CELL_SIZE, large_dims[0][1] + LARGE_CELL_SIZE, GRID_SIZE, SMALL_CELL_SIZE, GRAY, corner='top-left'))
+        corner = 'top-left' if game.getActivePlayer().id > 0 else 'bottom-left'
+        all_grid_dims.append(draw_grid(large_dims[1][0] + LARGE_CELL_SIZE, large_dims[0][1] + (GRID_SIZE/2) * LARGE_CELL_SIZE, GRID_SIZE, SMALL_CELL_SIZE, GRAY, corner=corner))
 
         # Display mouse position
         if SHOW_MOUSE_POS:
@@ -226,7 +230,7 @@ def main():
         draw_card_on_grid(TOP_LEFT_GRID_INDEX, p2.cards[0])
         draw_card_on_grid(TOP_RIGHT_GRID_INDEX, p2.cards[1])
 
-        draw_card_on_grid(RIGHT_GRID_INDEX, game.heldCard)
+        draw_card_on_grid(RIGHT_GRID_INDEX, game.heldCard, game.getActivePlayer().id)
 
         # Draw Pieces
         for x in range(GRID_SIZE):
