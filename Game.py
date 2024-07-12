@@ -13,6 +13,12 @@ KING_P1 = PLAYER1 * KING_BASE
 PAWN_P2 = PLAYER2 * PAWN_BASE
 KING_P2 = PLAYER2 * KING_BASE
 
+# Outcome Values
+WIN = 1
+LOSE = 0
+BAD_PLAY = -1
+DRAW = 0.5
+
 EMPTY = 0
 
 class Game:
@@ -34,7 +40,7 @@ class Game:
             p.addCard(self.cardPool.pop())
         self.heldCard = self.cardPool.pop()
 
-        self.preProcessMove()
+        self.move(1, (-2, -2))
         
     def initPlace(self):
         for p in self.players:
@@ -101,15 +107,74 @@ class Game:
 
     def preProcessMove(self):
         state = []
+        state.append(self.activePlayerIndex)
         # 5 x 24 bools for active player cards, inactive cards, held card
         for p in self.players:
             random.shuffle(p.cards)
             for c in p.cards:
                 state.extend(self.getStateFromCard(c))
         state.extend(self.getStateFromCard(self.heldCard))
-        state.extend(self.getStateFromBoard())
-        a = 1
 
-            
+        # 4 x 25 for locations in this order:
+        # active player king, active pawn, inactive king, inactive pawn
+        # This should be relative to the active player's perspective, 
+        # regardless of the absolute positions of the pieces on the board 
+        state.extend(self.getStateFromBoard())
+        return state
+    
+    def postProcessMove(self, cardIndex, moveTuple, moveWasValid = True):
+        # 2x 5x5 for each card
+        # moveTuple is -2 indexed 
+        boardSize = self.grid_size * self.grid_size
+        state = [False] * boardSize * 2
+        selectedMove = cardIndex * boardSize + (moveTuple[0] + 2) * self.grid_size + (moveTuple[1] + 2)
+        state[selectedMove] = True
+        # Default outcome to 
+        state.append(DRAW if moveWasValid else BAD_PLAY)
+        return state
+
+    def move(self, cardIndex, moveTuple):
+        state = self.preProcessMove()
+        # actual move logic here
+        moveValid = False
+        post_state = self.postProcessMove(cardIndex, moveTuple, moveValid)
+        state.extend(post_state)
+
+        # check win logic here
+        win, loss = self.checkWin(moveValid)
+
+        return win, loss, state
+    
+    def get_value(self, location):
+        return self.pieceLocations[location[0]][location[1]]
+
+    def checkWin(self, moveValid):
+        win = False
+        loss = False
+        
+        if not moveValid:
+            loss = True
+            return win, loss
+        
+        inactive_player_king = KING_BASE * self.getInactivePlayer().id
+        active_player_king = KING_BASE * self.getActivePlayer().id
+        
+        # Check if the inactive player's king exists on the board
+        inactive_king_exists = any(
+            inactive_player_king == self.get_value([x, y])
+            for x in range(self.grid_size) for y in range(self.grid_size)
+        )
+        
+        if not inactive_king_exists:
+            win = True
+        
+        # Check if the active player's king is in the starting position of the inactive player's king
+        inactive_player_starting_king_position = (Player.KING_POS, self.getInactivePlayer().backRow)
+        if self.get_value(inactive_player_starting_king_position) == active_player_king:
+            win = True
+
+        return win, loss
+
+        
 
     
