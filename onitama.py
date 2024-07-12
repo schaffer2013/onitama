@@ -3,24 +3,15 @@ import sys
 import Cards
 import numpy as np
 
-from Game import Game
+import Game
+from Game import Game as G
 from Player import Player
 
 # Initialize Pygame
 pygame.init()
 
 
-# Piece Values 
-PLAYER1 = 1
-PLAYER2 = -1
-PAWN_BASE = 1
-KING_BASE = 2
-EMPTY = 0
-PAWN_P1 = PLAYER1 * PAWN_BASE
-KING_P1 = PLAYER1 * KING_BASE
-PAWN_P2 = PLAYER2 * PAWN_BASE
-KING_P2 = PLAYER2 * KING_BASE
-LAST_MOVE = 99
+
 backline_P1 = 0
 backline_P2 = 4
 
@@ -116,13 +107,13 @@ def set_cell_color(grid_index, col, row, color, flip = True):
     pygame.draw.rect(screen, color, rect)
 
 def drawPiece(x, y, pieceType):
-    if pieceType == PAWN_P1:
+    if pieceType == Game.PAWN_P1:
         color = DARK_RED
-    elif pieceType == KING_P1:
+    elif pieceType == Game.KING_P1:
         color = RED
-    elif pieceType == PAWN_P2:
+    elif pieceType == Game.PAWN_P2:
         color = DARK_GREEN
-    elif pieceType == KING_P2:
+    elif pieceType == Game.KING_P2:
         color = GREEN
     else:
         color = WHITE
@@ -170,9 +161,9 @@ def rotateN(t1, center, n):
 #endregion
 
 #region Board State
-p1 = Player(PLAYER1, backline_P1)
-p2 = Player(PLAYER2, backline_P2)
-game = Game(GRID_SIZE)
+p1 = Player(Game.PLAYER1, backline_P1)
+p2 = Player(Game.PLAYER2, backline_P2)
+game = G(GRID_SIZE)
 game.addPlayer(p1)
 game.addPlayer(p2)
 
@@ -214,7 +205,7 @@ def main():
         all_grid_dims.append(draw_grid(large_dims[1][0], large_dims[1][1] + LARGE_CELL_SIZE, GRID_SIZE, SMALL_CELL_SIZE, GRAY, corner='top-right'))
 
         # Draw the right small grid
-        corner = 'top-left' if game.getActivePlayer().id > 0 else 'bottom-left'
+        corner = 'top-left' if game.getActivePlayer().id == Game.PLAYER1 else 'bottom-left'
         all_grid_dims.append(draw_grid(large_dims[1][0] + LARGE_CELL_SIZE, large_dims[0][1] + (GRID_SIZE/2) * LARGE_CELL_SIZE, GRID_SIZE, SMALL_CELL_SIZE, GRAY, corner=corner))
 
         # Display mouse position
