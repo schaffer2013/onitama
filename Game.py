@@ -1,6 +1,8 @@
 from Player import Player
+import Player as P
 import Cards
 import random
+import os, csv
 
 # Piece Values 
 PLAYER1 = 1
@@ -22,16 +24,18 @@ DRAW = 0.5
 EMPTY = 0
 
 class Game:
-    def __init__(self, grid_size):
+    def __init__(self, grid_size, filename):
         self.players = []
         self.cardPool = [Cards.TIGER, Cards.DRAGON, Cards.FROG, Cards.CRAB, Cards.ELEPHANT]
         self.grid_size = grid_size
         self.pieceLocations = [ [EMPTY]*self.grid_size for i in range(self.grid_size)]
         self.activePlayerIndex = 0
+        self.moves = []  # Initialize moves list to store state after each move
+        self.filename = filename
         
     def addPlayer(self, player:Player):
         self.players.append(player)
-        self.getActivePlayer()
+        #self.getActivePlayer()
 
     def deal(self):
         random.shuffle(self.cardPool)
@@ -39,9 +43,24 @@ class Game:
             p.addCard(self.cardPool.pop())
             p.addCard(self.cardPool.pop())
         self.heldCard = self.cardPool.pop()
+    
+    def playFull(self):
+        numMoves = 0
+        loss = False
+        win = False
+        while not loss and not win:
+            numMoves += 1
+            win, loss, state, invalid = self.move()
+        #print(f'Complete in {numMoves} moves')
+        return numMoves, invalid
 
-        self.move(1, (-2, -2))
-        
+    def movePiece(self, pieceLocation, move):
+        pieceVal = self.pieceLocations[pieceLocation[0]][pieceLocation[1]]
+        newLocationX = pieceLocation[0] + move[0]
+        newLocationY = pieceLocation[1] + move[1]
+        self.pieceLocations[newLocationX][newLocationY] = pieceVal
+        self.pieceLocations[pieceLocation[0]][pieceLocation[1]] = 0
+
     def initPlace(self):
         for p in self.players:
             p.initPlace(self.pieceLocations)
@@ -50,10 +69,10 @@ class Game:
     def nextPlayer(self):
         self.activePlayerIndex = (self.activePlayerIndex + 1) % len(self.players)
         
-    def getActivePlayer(self):
+    def getActivePlayer(self) -> Player:
         return self.players[self.activePlayerIndex]
     
-    def getInactivePlayer(self):
+    def getInactivePlayer(self) -> Player:
         return self.players[(self.activePlayerIndex + 1) % len(self.players)]
     
     def getStateFromCard(self, card):
@@ -94,6 +113,7 @@ class Game:
                 state.append(board[x][y] == pieceValue * self.getActivePlayer().id)
         return state
 
+
     def getStateFromBoard(self):
         state = []
         if self.getActivePlayer().id == PLAYER1:
@@ -106,10 +126,13 @@ class Game:
 
 
     def preProcessMove(self):
+        return self.getPreState()
+
+    def getPreState(self):
         state = []
         state.append(self.activePlayerIndex)
         # 5 x 24 bools for active player cards, inactive cards, held card
-        for p in self.players:
+        for p in [self.getActivePlayer(), self.getInactivePlayer()]:
             random.shuffle(p.cards)
             for c in p.cards:
                 state.extend(self.getStateFromCard(c))
@@ -122,28 +145,49 @@ class Game:
         state.extend(self.getStateFromBoard())
         return state
     
-    def postProcessMove(self, cardIndex, moveTuple, moveWasValid = True):
-        # 2x 5x5 for each card
-        # moveTuple is -2 indexed 
-        boardSize = self.grid_size * self.grid_size
-        state = [False] * boardSize * 2
-        selectedMove = cardIndex * boardSize + (moveTuple[0] + 2) * self.grid_size + (moveTuple[1] + 2)
-        state[selectedMove] = True
-        # Default outcome to 
+    def postProcessMove(self, cardIndex, movedPieceLocation, moveTuple, moveWasValid = True):
+
+        state = []
+        activePlayer = self.getActivePlayer()
+        state.extend(activePlayer.getMoveState(self.grid_size, cardIndex, moveTuple))
+
+        # 1x 5x5 to show where the selected piece was 
+        state.extend(activePlayer.getStateFromLocation(self.grid_size, movedPieceLocation))
+
+        # Default outcome to draw unless it was invalid
         state.append(DRAW if moveWasValid else BAD_PLAY)
+
+        # TODO
+        # Swap held card with used player card.
+        self.heldCard = self.getActivePlayer().replaceCard(self.heldCard, cardIndex)
+        # Replace new piece location with piece
+        # Set old piece location to 0
+
         return state
 
-    def move(self, cardIndex, moveTuple):
+    def move(self):
         state = self.preProcessMove()
         # actual move logic here
-        moveValid = False
-        post_state = self.postProcessMove(cardIndex, moveTuple, moveValid)
+
+        pieceLocation, cardIndex, move = self.getActivePlayer().makeMoveDecision(self.pieceLocations, state)
+        moveValid = self.getActivePlayer().validateMove(move, pieceLocation)
+        if moveValid:
+            self.movePiece(pieceLocation, move)
+        post_state = self.postProcessMove(cardIndex, pieceLocation, move, moveValid)
         state.extend(post_state)
+        self.moves.append(state) 
 
         # check win logic here
         win, loss = self.checkWin(moveValid)
 
-        return win, loss, state
+        if win or loss:
+            winning_player_id = self.getActivePlayer().id if win else self.getInactivePlayer().id
+            if moveValid:
+                self.updateOutcomes(winning_player_id)
+            self.writeMovesToCSV(self.filename)
+        
+        self.nextPlayer() #should be last!
+        return win, loss, state, not moveValid
     
     def get_value(self, location):
         return self.pieceLocations[location[0]][location[1]]
@@ -169,12 +213,47 @@ class Game:
             win = True
         
         # Check if the active player's king is in the starting position of the inactive player's king
-        inactive_player_starting_king_position = (Player.KING_POS, self.getInactivePlayer().backRow)
+        inactive_player_starting_king_position = (P.KING_POS, self.getInactivePlayer().backRow)
         if self.get_value(inactive_player_starting_king_position) == active_player_king:
             win = True
 
         return win, loss
+    
+    def updateOutcomes(self, winning_player_id):
+        for move in self.moves:
+            player_id = move[0]
+            if player_id == winning_player_id:
+                move[-1] = WIN
+            else:
+                move[-1] = LOSE
 
+    def writeMovesToCSV(self, filename):
+        file_exists = os.path.isfile(filename)
+        headers = [
+            'active_player_index',             # Active player index (0 or 1)
+            # Card States (5 cards * 24 columns)
+            *[f'card1_active_{i}' for i in range(24)],  # Card 1 Active Player
+            *[f'card2_active_{i}' for i in range(24)],  # Card 2 Active Player
+            *[f'card1_inactive_{i}' for i in range(24)],  # Card 1 Inactive Player
+            *[f'card2_inactive_{i}' for i in range(24)],  # Card 2 Inactive Player
+            *[f'held_card_{i}' for i in range(24)],       # Held Card State
+            # Piece Locations (4 pieces * 25 columns)
+            *[f'active_king_{i}' for i in range(25)],     # Active Player King
+            *[f'active_pawn_{i}' for i in range(25)],     # Active Player Pawns
+            *[f'inactive_king_{i}' for i in range(25)],    # Inactive Player King
+            *[f'inactive_pawn_{i}' for i in range(25)],    # Inactive Player Pawns
+            # Possible Moves (2 * 25 columns)
+            *[f'possible_move_1_{i}' for i in range(25)],  # Possible Move 1
+            *[f'possible_move_2_{i}' for i in range(25)],  # Possible Move 2
+            # Moved Piece Location (1 * 25 columns)
+            *[f'moved_piece_location_{i}' for i in range(25)],  # Where the moved piece was
+            'outcome'                          # Game outcome
+        ]
         
+        with open(filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            if not file_exists:
+                writer.writerow(headers)  # Write headers if file does not exist
+            writer.writerows(self.moves)
 
     

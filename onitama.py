@@ -1,3 +1,5 @@
+import os
+import time
 import pygame
 import sys
 import Cards
@@ -5,12 +7,13 @@ import numpy as np
 
 import Game
 from Game import Game as G
-from Player import Player
+import Player
+from Player import Player as P
+
+CSV_FILE = 'game_moves.csv'
 
 # Initialize Pygame
 pygame.init()
-
-
 
 backline_P1 = 0
 backline_P2 = 4
@@ -161,28 +164,74 @@ def rotateN(t1, center, n):
 #endregion
 
 #region Board State
-p1 = Player(Game.PLAYER1, backline_P1)
-p2 = Player(Game.PLAYER2, backline_P2)
-game = G(GRID_SIZE)
-game.addPlayer(p1)
-game.addPlayer(p2)
 
-game.initPlace()
-game.deal()
+def initGame():
+    p1 = P(Game.PLAYER1, backline_P1)
+    p2 = P(Game.PLAYER2, backline_P2)
+    game = G(GRID_SIZE, CSV_FILE)
+    game.addPlayer(p1)
+    game.addPlayer(p2)
 
-val = p1.getRandomValidatedMove()
+    game.initPlace()
+    game.deal()
+    return game, p1, p2
+
 
 #endregion
 
 # Main loop
 def main():
+    game, p1, p2 = initGame()
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                game.nextPlayer()
+                totalMoves = 0
+                maxMoves = 0
+                minMoves = float('inf')  # Set to infinity so any actual move count will be smaller
+                numInvalidMoves = 0
+
+                target = 10000
+                highWater = 0
+                start_time = time.time()
+                while totalMoves < target:
+                    
+                    if int(totalMoves/target*1000) > highWater:
+                        highWater = int(totalMoves/target*1000)
+                        # Calculate elapsed time
+                        elapsed_time = time.time() - start_time
+                        # Estimate remaining time
+                        remaining_time = (elapsed_time / (totalMoves / target)) - elapsed_time
+                        # Convert remaining time to minutes and seconds
+                        minutes, seconds = divmod(remaining_time, 60)
+                        
+                        # Print progress and ETA
+                        print(f'{highWater/10}% complete. ETA: {int(minutes)} minutes {int(seconds)} seconds')
+
+                    numMoves, invalid = game.playFull()
+                    numInvalidMoves += invalid
+                    totalMoves += numMoves
+                    
+                    # Update max and min moves
+                    if numMoves > maxMoves:
+                        maxMoves = numMoves
+                    if numMoves < minMoves:
+                        minMoves = numMoves
+                    
+                    # Initialize a new game
+                    game, p1, p2 = initGame()
+                
+
+                print(f'Complete in {totalMoves} moves')
+                print(f'Maximum moves in a game: {maxMoves}')
+                print(f'Minimum moves in a game: {minMoves}')
+                print(f'Invalid moves: {numInvalidMoves/totalMoves * 100}%')
+                elapsed_time = elapsed_time = time.time() - start_time
+                print(f'Time per move: {elapsed_time/totalMoves} sec/move')
+                #Player.retrain()
+
 
         # Get mouse position
         if SHOW_MOUSE_POS:
