@@ -70,16 +70,12 @@ def build_model(input_dim):
     model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mean_squared_error'])
     return model
 
-@tf.function
-def tf_predict(model, input_tensor):
-    return model(input_tensor)
-
 def predict(model, scaler, input_data):
     if model is not None and scaler is not None:
         input_vector = np.array(input_data).reshape(1, -1)
         input_vector = scaler.transform(input_vector)
         input_tensor = tf.convert_to_tensor(input_vector, dtype=tf.float32)
-        prediction = tf_predict(model, input_tensor)
+        prediction = model(input_tensor)
         return prediction.numpy()[0][0]
     return random.random()
 

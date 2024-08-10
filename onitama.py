@@ -12,7 +12,7 @@ import Player
 from Player import Player as P
 
 CSV_FILE = 'game_moves.csv'
-MOVE_TARGET = 75000
+MOVE_TARGET = 50000
 
 # Initialize Pygame
 pygame.init()
@@ -221,14 +221,14 @@ def main():
                         # Print progress and ETA
                         print(f'{highWater * INCREMENT * 100:.1f}% complete. ETA: {eta_str}')
 
-                    numMoves, invalid, winType = game.playFull()
+                    numMoves, gameInvalidMoves, winType = game.playFull()
                     totalGames += 1
                     if winType:
                         if winType == Game.WAY_OF_THE_STONE:
                             stoneCount += 1
                         if winType == Game.WAY_OF_THE_STREAM:
                             streamCount += 1
-                    numInvalidMoves += invalid
+                    numInvalidMoves += gameInvalidMoves
                     totalMoves += numMoves
                     
                     # Update max and min moves

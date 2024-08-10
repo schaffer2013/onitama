@@ -21,6 +21,37 @@ def softmax(x):
     e_x = np.exp(x - np.max(x))  # Subtract max value for numerical stability
     return e_x / e_x.sum(axis=0)  # Sum along the appropriate axis
 
+def make_softmax_decision(logits):
+    # Compute probabilities using the softmax function
+    probabilities = softmax(logits)
+    
+    # Generate a random number between 0 and 1
+    random_number = np.random.rand()
+    
+    # Compute the cumulative sum of the probabilities
+    cumulative_probabilities = np.cumsum(probabilities)
+    
+    # Determine the index of the decision
+    decision_index = np.where(cumulative_probabilities >= random_number)[0][0]
+    
+    return decision_index
+
+# @cache
+# def rotate_point_180(x, y, cx=2, cy=2):
+#     # Translate point to origin
+#     translated_x = x - cx
+#     translated_y = y - cy
+    
+#     # Rotate 180 degrees around origin
+#     rotated_x = -translated_x
+#     rotated_y = -translated_y
+    
+#     # Translate back to the original center
+#     final_x = rotated_x + cx
+#     final_y = rotated_y + cy
+    
+#     return final_x, final_y
+
 class Player:
     def __init__(self, id, backRow):
         self.id = id #id should be -1 or 1
@@ -96,6 +127,7 @@ class Player:
         decision_state_prefix = statePrefix[1:]
 
         possibleMoves = []
+        possibleMovesScores = []
 
         bestMoveValue = -999.9
         bestMove = (-10, -10)
@@ -109,11 +141,12 @@ class Player:
             score = predict(model, scaler, testState)
 
             possibleMoves.append([score, move, pawn, cardIndex])
-            if score > bestMoveValue:
-                bestMoveValue = score
-                bestMove = move
-                bestPiece = pawn
-                bestCardIndex = cardIndex
+            possibleMovesScores.append(score)
+            # if score > bestMoveValue:
+            #     bestMoveValue = score
+            #     bestMove = move
+            #     bestPiece = pawn
+            #     bestCardIndex = cardIndex
 
         with ThreadPoolExecutor() as executor:
             futures = []
@@ -125,12 +158,7 @@ class Player:
 
             for future in futures:
                 future.result()
-        highM = -100        
-        for m in possibleMoves:
-            if m[0]>highM:
-                highM = m[0]
-        if highM != bestMoveValue:
-            raise
+
         # isValid = self.validateMove(bestMove, bestPiece)
         # if not isValid:
         #     valids = []
@@ -140,6 +168,9 @@ class Player:
         #         validityScores.append(m[0])
         #     softmaxes = softmax(validityScores)
         #     validityMoves = zip(possibleMoves, valids, softmaxes)
+
+        decisionIndex = make_softmax_decision(possibleMovesScores)
+        (_, bestMove, bestPiece, bestCardIndex) = possibleMoves[decisionIndex]
         return bestPiece, bestCardIndex, bestMove
     
     #@cache

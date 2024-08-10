@@ -38,6 +38,7 @@ class Game:
         self.grid_size = grid_size
         self.pieceLocations = [ [EMPTY]*self.grid_size for i in range(self.grid_size)]
         self.activePlayerIndex = 0
+        self.flipMoveForPlayer2 = False
         self.moves = []  # Initialize moves list to store state after each move
         self.filename = filename
         
@@ -54,13 +55,15 @@ class Game:
     
     def playFull(self):
         numMoves = 0
+        numInvalidMoves = 0
         loss = False
         winType = None
         while not loss and not winType:
             numMoves += 1
             winType, loss, state, invalid = self.move()
+            numInvalidMoves += invalid
         #print(f'Complete in {numMoves} moves')
-        return numMoves, invalid, winType
+        return numMoves, numInvalidMoves, winType
 
     def movePiece(self, pieceLocation, move):
         pieceVal = self.pieceLocations[pieceLocation[0]][pieceLocation[1]]
@@ -76,6 +79,7 @@ class Game:
 
     def nextPlayer(self):
         self.activePlayerIndex = (self.activePlayerIndex + 1) % len(self.players)
+        self.flipMoveForPlayer2 = self.activePlayerIndex == 1
         
     def getActivePlayer(self) -> Player:
         return self.players[self.activePlayerIndex]
@@ -168,7 +172,8 @@ class Game:
 
         # TODO
         # Swap held card with used player card.
-        self.heldCard = self.getActivePlayer().replaceCard(self.heldCard, cardIndex)
+        if moveWasValid:
+            self.heldCard = self.getActivePlayer().replaceCard(self.heldCard, cardIndex)
         # Replace new piece location with piece
         # Set old piece location to 0
 
@@ -179,23 +184,29 @@ class Game:
         # actual move logic here
 
         pieceLocation, cardIndex, move = self.getActivePlayer().makeMoveDecision(self.pieceLocations, state)
-        moveValid = self.getActivePlayer().validateMove(move, pieceLocation)
+        
+        if self.getActivePlayer().id == PLAYER2:
+            relativeMove = self.rotate_point_180(move[0], move[1], cx=0, cy=0)
+        else:
+            relativeMove = move
+
+        moveValid = self.getActivePlayer().validateMove(relativeMove, pieceLocation)
         if moveValid:
-            self.movePiece(pieceLocation, move)
+            self.movePiece(pieceLocation, relativeMove)
         post_state = self.postProcessMove(cardIndex, pieceLocation, move, moveValid)
         state.extend(post_state)
         self.moves.append(state) 
 
         # check win logic here
         winType, loss = self.checkWin(moveValid)
-
-        if winType or loss:
-            winning_player_id = self.getActivePlayer().id if winType else self.getInactivePlayer().id
-            if moveValid:
-                self.updateOutcomes(winning_player_id)
-            self.writeMovesToCSV(self.filename)
         
-        self.nextPlayer() #should be last!
+        if moveValid:
+            if winType or loss:
+                winning_player_id = self.getActivePlayer().id if winType else self.getInactivePlayer().id
+                self.updateOutcomes(0 if winning_player_id == PLAYER1 else 1)
+                self.writeMovesToCSV(self.filename)
+            
+            self.nextPlayer() #should be last!
         return winType, loss, state, not moveValid
     
     def get_value(self, location):
@@ -205,9 +216,9 @@ class Game:
         win = None
         loss = False
         
-        if not moveValid:
-            loss = True
-            return win, loss
+        #if not moveValid:
+        #    loss = True
+        #    return win, loss
         
         inactive_player_king = KING_BASE * self.getInactivePlayer().id
         active_player_king = KING_BASE * self.getActivePlayer().id
@@ -229,14 +240,17 @@ class Game:
         return win, loss
     
     def updateOutcomes(self, winning_player_id):
-        num_moves = len(self.moves)
-        for i, move in enumerate(self.moves):
-            player_id = move[0]
-            if player_id == winning_player_id:
-                move[-1] = 0.6 + 0.4 * (i / (num_moves - 1))  # Scale from 0.6 to 1.0
-            else:
-                move[-1] = 0.4 * (1 - i / (num_moves - 1))    # Scale from 0.4 to 0.0
+        # Filter moves that are greater than BAD_PLAY
+        tempMoves = [m for m in self.moves if m[-1] > BAD_PLAY]
+        num_moves = len(tempMoves)
 
+        # Modify the moves based on player_id
+        for i, move in enumerate(tempMoves):
+            player_id = move[0]
+            move[-1] = 0.6 + 0.4 * (i / (num_moves - 1)) if player_id == winning_player_id else 0.4 * (1 - i / (num_moves - 1))
+
+        # Append moves less than or equal to BAD_PLAY and update self.moves
+        self.moves = tempMoves + [m for m in self.moves if m[-1] <= BAD_PLAY]
 
     def writeMovesToCSV(self, filename):
         file_exists = os.path.isfile(filename)
