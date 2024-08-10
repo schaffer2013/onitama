@@ -1,3 +1,4 @@
+from functools import cache
 from Player import Player
 import Player as P
 import Cards
@@ -18,15 +19,22 @@ KING_P2 = PLAYER2 * KING_BASE
 # Outcome Values
 WIN = 1
 LOSE = 0
-BAD_PLAY = -1
+BAD_PLAY = -10
 DRAW = 0.5
+
+WAY_OF_THE_STONE = 1
+WAY_OF_THE_STREAM = 2
 
 EMPTY = 0
 
 class Game:
     def __init__(self, grid_size, filename):
         self.players = []
-        self.cardPool = [Cards.TIGER, Cards.DRAGON, Cards.FROG, Cards.CRAB, Cards.ELEPHANT]
+        self.cardPool = [
+            Cards.TIGER, Cards.DRAGON, Cards.FROG, Cards.RABBIT, Cards.CRAB, 
+            Cards.ELEPHANT, Cards.GOOSE, Cards.ROOSTER, Cards.MONKEY, Cards.MANTIS, 
+            Cards.HORSE, Cards.OX, Cards.CRANE, Cards.BOAR, Cards.COBRA, Cards.EEL
+        ]
         self.grid_size = grid_size
         self.pieceLocations = [ [EMPTY]*self.grid_size for i in range(self.grid_size)]
         self.activePlayerIndex = 0
@@ -47,12 +55,12 @@ class Game:
     def playFull(self):
         numMoves = 0
         loss = False
-        win = False
-        while not loss and not win:
+        winType = None
+        while not loss and not winType:
             numMoves += 1
-            win, loss, state, invalid = self.move()
+            winType, loss, state, invalid = self.move()
         #print(f'Complete in {numMoves} moves')
-        return numMoves, invalid
+        return numMoves, invalid, winType
 
     def movePiece(self, pieceLocation, move):
         pieceVal = self.pieceLocations[pieceLocation[0]][pieceLocation[1]]
@@ -91,6 +99,7 @@ class Game:
                 altBoard[new_x][new_y] = self.pieceLocations[act_x][act_y]
         return altBoard
 
+    @cache
     def rotate_point_180(self, x, y, cx=2, cy=2):
         # Translate point to origin
         translated_x = x - cx
@@ -178,22 +187,22 @@ class Game:
         self.moves.append(state) 
 
         # check win logic here
-        win, loss = self.checkWin(moveValid)
+        winType, loss = self.checkWin(moveValid)
 
-        if win or loss:
-            winning_player_id = self.getActivePlayer().id if win else self.getInactivePlayer().id
+        if winType or loss:
+            winning_player_id = self.getActivePlayer().id if winType else self.getInactivePlayer().id
             if moveValid:
                 self.updateOutcomes(winning_player_id)
             self.writeMovesToCSV(self.filename)
         
         self.nextPlayer() #should be last!
-        return win, loss, state, not moveValid
+        return winType, loss, state, not moveValid
     
     def get_value(self, location):
         return self.pieceLocations[location[0]][location[1]]
 
     def checkWin(self, moveValid):
-        win = False
+        win = None
         loss = False
         
         if not moveValid:
@@ -210,22 +219,24 @@ class Game:
         )
         
         if not inactive_king_exists:
-            win = True
+            win = WAY_OF_THE_STONE
         
         # Check if the active player's king is in the starting position of the inactive player's king
         inactive_player_starting_king_position = (P.KING_POS, self.getInactivePlayer().backRow)
         if self.get_value(inactive_player_starting_king_position) == active_player_king:
-            win = True
+            win = WAY_OF_THE_STREAM
 
         return win, loss
     
     def updateOutcomes(self, winning_player_id):
-        for move in self.moves:
+        num_moves = len(self.moves)
+        for i, move in enumerate(self.moves):
             player_id = move[0]
             if player_id == winning_player_id:
-                move[-1] = WIN
+                move[-1] = 0.6 + 0.4 * (i / (num_moves - 1))  # Scale from 0.6 to 1.0
             else:
-                move[-1] = LOSE
+                move[-1] = 0.4 * (1 - i / (num_moves - 1))    # Scale from 0.4 to 0.0
+
 
     def writeMovesToCSV(self, filename):
         file_exists = os.path.isfile(filename)

@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import os
 import time
 import pygame
@@ -11,6 +12,7 @@ import Player
 from Player import Player as P
 
 CSV_FILE = 'game_moves.csv'
+MOVE_TARGET = 75000
 
 # Initialize Pygame
 pygame.init()
@@ -193,24 +195,39 @@ def main():
                 minMoves = float('inf')  # Set to infinity so any actual move count will be smaller
                 numInvalidMoves = 0
 
-                target = 10000
+                target = MOVE_TARGET
+                INCREMENT = 0.01
                 highWater = 0
+
+                totalGames = 0
+                stoneCount = 0
+                streamCount = 0
                 start_time = time.time()
                 while totalMoves < target:
                     
-                    if int(totalMoves/target*1000) > highWater:
-                        highWater = int(totalMoves/target*1000)
+                    if int(totalMoves / target / INCREMENT) > highWater:
+                        highWater = int(totalMoves / target / INCREMENT)
+                        
                         # Calculate elapsed time
                         elapsed_time = time.time() - start_time
+                        
                         # Estimate remaining time
                         remaining_time = (elapsed_time / (totalMoves / target)) - elapsed_time
-                        # Convert remaining time to minutes and seconds
-                        minutes, seconds = divmod(remaining_time, 60)
+                        
+                        # Calculate the ETA
+                        eta = datetime.now() + timedelta(seconds=remaining_time)
+                        eta_str = eta.strftime("%m/%d %I:%M %p")  # Format ETA as "hh:mm AM/PM"
                         
                         # Print progress and ETA
-                        print(f'{highWater/10}% complete. ETA: {int(minutes)} minutes {int(seconds)} seconds')
+                        print(f'{highWater * INCREMENT * 100:.1f}% complete. ETA: {eta_str}')
 
-                    numMoves, invalid = game.playFull()
+                    numMoves, invalid, winType = game.playFull()
+                    totalGames += 1
+                    if winType:
+                        if winType == Game.WAY_OF_THE_STONE:
+                            stoneCount += 1
+                        if winType == Game.WAY_OF_THE_STREAM:
+                            streamCount += 1
                     numInvalidMoves += invalid
                     totalMoves += numMoves
                     
@@ -224,13 +241,22 @@ def main():
                     game, p1, p2 = initGame()
                 
 
+                # Calculate the percentages
+                invalidPercentage = numInvalidMoves / totalMoves * 100
+                invalidGamePercentage = numInvalidMoves / totalGames * 100
+                stonePercentage = stoneCount / totalGames * 100
+                streamPercentage = streamCount / totalGames * 100
+
+                # Print the results
                 print(f'Complete in {totalMoves} moves')
                 print(f'Maximum moves in a game: {maxMoves}')
                 print(f'Minimum moves in a game: {minMoves}')
-                print(f'Invalid moves: {numInvalidMoves/totalMoves * 100}%')
-                elapsed_time = elapsed_time = time.time() - start_time
-                print(f'Time per move: {elapsed_time/totalMoves} sec/move')
-                #Player.retrain()
+                print(f'Invalid moves: {invalidPercentage:.2f}% of moves')
+                print(f'Invalid game-enders: {invalidGamePercentage:.2f}% of games')
+                print(f'Way of the Stone: {stonePercentage:.2f}%')
+                print(f'Way of the Stream: {streamPercentage:.2f}%')
+                elapsed_time = time.time() - start_time
+                print(f'Time per move: {elapsed_time/totalMoves:.4f} sec/move')
 
 
         # Get mouse position

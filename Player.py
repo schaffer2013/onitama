@@ -3,7 +3,10 @@ KING_BASE = 2
 PAWN_POS = [0, 1, 3, 4]
 KING_POS = 2
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import cache
+
+import numpy as np
 import Cards
 import random
 from nn import get_model_and_scaler, predict
@@ -12,6 +15,11 @@ from nn import get_model_and_scaler, predict
 model, scaler = get_model_and_scaler(csv_file= 'game_moves.csv')
 def retrain():
     get_model_and_scaler(csv_file= 'game_moves.csv', retrain = True)
+
+def softmax(x):
+    # Compute softmax values for each set of scores in x.
+    e_x = np.exp(x - np.max(x))  # Subtract max value for numerical stability
+    return e_x / e_x.sum(axis=0)  # Sum along the appropriate axis
 
 class Player:
     def __init__(self, id, backRow):
@@ -82,38 +90,57 @@ class Player:
         move = self.getMove(cardIndex, moveIndex)
         return pieceLocation, cardIndex, move
     
-    def makeMoveDecision(self, board, statePrefix = []):
+    def makeMoveDecision(self, board, statePrefix=[]):
         grid_size = len(board)
         self.piecesFromBoard(board)
         decision_state_prefix = statePrefix[1:]
 
-        #for each piece, for each move: getMoveState , getStateFromLocation
+        possibleMoves = []
+
         bestMoveValue = -999.9
         bestMove = (-10, -10)
         bestPiece = (-10, -10)
         bestCardIndex = 3
-        for cardIndex in [0, 1]:
-            for move in self.cards[cardIndex]:
-                for pawn in self.pawnPos:
-                    stateSuffix = self.getStateSuffix(grid_size, cardIndex, move, pawn)
-                    testState = decision_state_prefix + stateSuffix
-                    score = predict(model, scaler, testState)
-                    if score > bestMoveValue:
-                        bestMoveValue = score
-                        bestMove = move
-                        bestPiece = pawn
-                        bestCardIndex = cardIndex
-                stateSuffix = self.getStateSuffix(grid_size, cardIndex, move, self.kingPos)
-                testState = decision_state_prefix + stateSuffix
-                score = predict(model, scaler, testState)
-                if score > bestMoveValue:
-                    bestMoveValue = score
-                    bestMove = move
-                    bestPiece = self.kingPos
-                    bestCardIndex = cardIndex
-                    
+
+        def evaluate_move(cardIndex, move, pawn):
+            nonlocal bestMoveValue, bestMove, bestPiece, bestCardIndex
+            stateSuffix = self.getStateSuffix(grid_size, cardIndex, move, pawn)
+            testState = decision_state_prefix + stateSuffix
+            score = predict(model, scaler, testState)
+
+            possibleMoves.append([score, move, pawn, cardIndex])
+            if score > bestMoveValue:
+                bestMoveValue = score
+                bestMove = move
+                bestPiece = pawn
+                bestCardIndex = cardIndex
+
+        with ThreadPoolExecutor() as executor:
+            futures = []
+            for cardIndex in [0, 1]:
+                for move in self.cards[cardIndex]:
+                    for pawn in self.pawnPos:
+                        futures.append(executor.submit(evaluate_move, cardIndex, move, pawn))
+                    futures.append(executor.submit(evaluate_move, cardIndex, move, self.kingPos))
+
+            for future in futures:
+                future.result()
+        highM = -100        
+        for m in possibleMoves:
+            if m[0]>highM:
+                highM = m[0]
+        if highM != bestMoveValue:
+            raise
+        # isValid = self.validateMove(bestMove, bestPiece)
+        # if not isValid:
+        #     valids = []
+        #     validityScores = []
+        #     for m in possibleMoves:
+        #         valids.append(self.validateMove(m[1], m[2]))
+        #         validityScores.append(m[0])
+        #     softmaxes = softmax(validityScores)
+        #     validityMoves = zip(possibleMoves, valids, softmaxes)
         return bestPiece, bestCardIndex, bestMove
-        #return self.getRandomMove()
     
     #@cache
     def getStateSuffix(self, gridSize, cardIndex, moveTuple, pieceLocation):
