@@ -121,7 +121,7 @@ class Player:
         move = self.getMove(cardIndex, moveIndex)
         return pieceLocation, cardIndex, move
     
-    def makeMoveDecision(self, board, statePrefix=[]):
+    def makeMoveDecision(self, board, statePrefix=[], invalidMoves = []):
         grid_size = len(board)
         self.piecesFromBoard(board)
         decision_state_prefix = statePrefix[1:]
@@ -153,8 +153,10 @@ class Player:
             for cardIndex in [0, 1]:
                 for move in self.cards[cardIndex]:
                     for pawn in self.pawnPos:
-                        futures.append(executor.submit(evaluate_move, cardIndex, move, pawn))
-                    futures.append(executor.submit(evaluate_move, cardIndex, move, self.kingPos))
+                        if (pawn, move) not in invalidMoves:
+                            futures.append(executor.submit(evaluate_move, cardIndex, move, pawn))
+                    if (self.kingPos, move) not in invalidMoves:
+                        futures.append(executor.submit(evaluate_move, cardIndex, move, self.kingPos))
 
             for future in futures:
                 future.result()

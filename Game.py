@@ -39,6 +39,7 @@ class Game:
         self.pieceLocations = [ [EMPTY]*self.grid_size for i in range(self.grid_size)]
         self.activePlayerIndex = 0
         self.flipMoveForPlayer2 = False
+        self.restrictedMoves = []
         self.moves = []  # Initialize moves list to store state after each move
         self.filename = filename
         
@@ -183,7 +184,7 @@ class Game:
         state = self.preProcessMove()
         # actual move logic here
 
-        pieceLocation, cardIndex, move = self.getActivePlayer().makeMoveDecision(self.pieceLocations, state)
+        pieceLocation, cardIndex, move = self.getActivePlayer().makeMoveDecision(self.pieceLocations, state, invalidMoves = self.restrictedMoves)
         
         if self.getActivePlayer().id == PLAYER2:
             relativeMove = self.rotate_point_180(move[0], move[1], cx=0, cy=0)
@@ -193,6 +194,9 @@ class Game:
         moveValid = self.getActivePlayer().validateMove(relativeMove, pieceLocation)
         if moveValid:
             self.movePiece(pieceLocation, relativeMove)
+            self.restrictedMoves.clear()
+        else: 
+            self.restrictedMoves.append((pieceLocation, move))
         post_state = self.postProcessMove(cardIndex, pieceLocation, move, moveValid)
         state.extend(post_state)
         self.moves.append(state) 
